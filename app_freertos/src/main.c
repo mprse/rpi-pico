@@ -17,6 +17,54 @@
 /* Choose 'C' for Celsius or 'F' for Fahrenheit. */
 #define TEMPERATURE_UNITS 'C'
 
+
+#define UDP_PORT 4444
+#define BEACON_MSG_LEN_MAX 127
+#define BEACON_TARGET "10.1.1.170"
+#define BEACON_INTERVAL_MS 1000
+
+struct udp_pcb* pcb = NULL;
+
+void udp_send_packet(uint32_t value) {
+    ip_addr_t addr;
+    ipaddr_aton(BEACON_TARGET, &addr);
+
+    int counter = 0;
+    struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, BEACON_MSG_LEN_MAX+1, PBUF_RAM);
+    char *req = (char *)p->payload;
+    memset(req, 0, BEACON_MSG_LEN_MAX+1);
+    snprintf(req, BEACON_MSG_LEN_MAX, "%d", value);
+    err_t er = udp_sendto(pcb, p, &addr, UDP_PORT);
+    pbuf_free(p);
+    if (er != ERR_OK) {
+        printf("Failed to send UDP packet! error=%d", er);
+    } else {
+        printf("Sent packet %d\n", counter);
+        counter++;
+    }
+}
+
+void gpio_callback(uint gpio, uint32_t events) {
+    switch(gpio){
+        case 18:
+            udp_send_packet(1);
+            printf("DOWN\n");
+            return;
+        case 19:
+            udp_send_packet(2);
+            printf("UP\n");
+            return;
+        case 20:
+            udp_send_packet(3);
+            printf("RIGHT\n");
+            return;
+        case 21:
+            udp_send_packet(4);
+            printf("LEFT\n");
+            return;
+    }
+}
+
 void init_temp_sensor(void)
 {
     adc_init();
@@ -64,11 +112,6 @@ float read_onboard_temperature(const char unit) {
 
 void led_task()
 {
-    if (cyw43_arch_init()) {
-        printf("Wi-Fi init failed");
-        while(1) {};
-    }
-
     while (true) {
         cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
         vTaskDelay(100);
@@ -88,6 +131,33 @@ void temp_task()
         vTaskDelay(100);
     }
 }
+
+void udp_task() {
+    struct udp_pcb* pcb = udp_new();
+
+    ip_addr_t addr;
+    ipaddr_aton(BEACON_TARGET, &addr);
+
+    int counter = 0;
+    while (true) {
+        struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, BEACON_MSG_LEN_MAX+1, PBUF_RAM);
+        char *req = (char *)p->payload;
+        memset(req, 0, BEACON_MSG_LEN_MAX+1);
+        snprintf(req, BEACON_MSG_LEN_MAX, "msg: %d\n", counter);
+        err_t er = udp_sendto(pcb, p, &addr, UDP_PORT);
+        pbuf_free(p);
+        if (er != ERR_OK) {
+            printf("Failed to send UDP packet! error=%d", er);
+        } else {
+            printf("Sent packet %d\n", counter);
+            counter++;
+        }
+
+        vTaskDelay(100);
+    }
+}
+
+
 
 void rfid_task()
 {
@@ -119,9 +189,34 @@ int main()
 
     printf("Hello, world!\n");
 
+    if (cyw43_arch_init()) {
+        printf("Wi-Fi init failed");
+        while(1) {};
+    }
+
+    cyw43_arch_enable_sta_mode();
+
+    printf("Connecting to Wi-Fi...\n");
+
+    gpio_set_irq_enabled_with_callback(18, GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
+    gpio_set_irq_enabled_with_callback(19, GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
+    gpio_set_irq_enabled_with_callback(20, GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
+    gpio_set_irq_enabled_with_callback(21, GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
+
+    pcb = udp_new();
+
+    if (cyw43_arch_wifi_connect_timeout_ms("Polinezja", "dupa1212", CYW43_AUTH_WPA2_AES_PSK, 30000)) {
+        printf("failed to connect.\n");
+        return 1;
+    } else {
+        printf("Connected.\n");
+    }
+
+
     xTaskCreate(led_task, "LED_Task", 256, NULL, 1, NULL);
     xTaskCreate(temp_task, "TEMP_Task", 256, NULL, 1, NULL);
     xTaskCreate(rfid_task, "RFID_Task", 256, NULL, 1, NULL);
+    //xTaskCreate(udp_task, "UDP_Task", 256, NULL, 1, NULL);
     vTaskStartScheduler();
 
     while(1){};
