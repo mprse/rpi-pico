@@ -5,6 +5,8 @@
 #include "pico/cyw43_arch.h"
 #include "hardware/adc.h"
 #include "hardware/uart.h"
+#include "lwip/pbuf.h"
+#include "lwip/udp.h"
 
 #define UART_ID uart1
 #define BAUD_RATE 9600
