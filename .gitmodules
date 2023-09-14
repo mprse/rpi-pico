@@ -7,3 +7,6 @@
 [submodule "app_freertos/freertos/FreeRTOS-Kernel"]
 	path = app_freertos/freertos/FreeRTOS-Kernel
 	url = git@github.com:FreeRTOS/FreeRTOS-Kernel.git
+[submodule "ble_pad/freertos/FreeRTOS-Kernel"]
+	path = ble_pad/freertos/FreeRTOS-Kernel
+	url = git@github.com:FreeRTOS/FreeRTOS-Kernel.git
