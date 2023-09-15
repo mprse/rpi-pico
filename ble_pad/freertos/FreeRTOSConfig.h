@@ -80,6 +80,13 @@
 #define INCLUDE_xTaskGetHandle                  1
 #define INCLUDE_xTaskResumeFromISR              1
 
+// macro to check if we are in an ISR
+#define portCHECK_IF_IN_ISR() ({ \
+    uint32_t ulIPSR;                                                  \
+    __asm volatile ("mrs %0, IPSR" : "=r" (ulIPSR)::);             \
+    ((uint8_t)ulIPSR)>0;})
+
 /* A header file that defines trace macro can be included here. */
+
 
 #endif /* FREERTOS_CONFIG_H */

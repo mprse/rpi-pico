@@ -8,31 +8,7 @@
 #include "lwip/pbuf.h"
 #include "lwip/udp.h"
 #include "ble_server.h"
-
-
-// handle button presses
-static void gpio_callback(uint gpio, uint32_t events)
-{
-    switch(gpio)
-    {
-    case 18:
-        send_data(0x9901);
-        printf(" DOWN ");
-        return;
-    case 19:
-        send_data(0x9902);
-        printf(" UP ");
-        return;
-    case 20:
-        send_data(0x9903);
-        printf(" RIGHT ");
-        return;
-    case 21:
-        send_data(0x9904);
-        printf(" LEFT ");
-        return;
-    }
-}
+#include "pad.h"
 
 int main()
 {
@@ -40,14 +16,11 @@ int main()
 
     printf("Hello, world!\n");
 
-    // attaches the gpio_callback function to the GPIOs
-    gpio_set_irq_enabled_with_callback(18, GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
-    gpio_set_irq_enabled_with_callback(19, GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
-    gpio_set_irq_enabled_with_callback(20, GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
-    gpio_set_irq_enabled_with_callback(21, GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
+    // initialize pad
+    pad_init(ble_server_send);
 
     // initialize ble server
-    BleServer_Init();
+    ble_server_init();
 
     // start the scheduler
     vTaskStartScheduler();

@@ -1,6 +1,7 @@
 add_executable(ble_server
         ble_server.c
         main.c
+        pad.c
 )
 
 target_compile_definitions(ble_server PRIVATE

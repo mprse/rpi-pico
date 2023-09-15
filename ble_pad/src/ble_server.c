@@ -12,6 +12,7 @@
 #include "pico/stdlib.h"
 #include "temp_sensor.h"
 
+#define HEARTBEAT_PERIOD_MS 300
 #define APP_AD_FLAGS 0x06
 static uint8_t adv_data[] =
 {
@@ -43,7 +44,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
             return;
         }
         gap_local_bd_addr(local_addr);
-        printf("BTstack up and running on %s.\n", bd_addr_to_str(local_addr));
+        printf("BLE up and running on %s.\n", bd_addr_to_str(local_addr));
 
         /* setup advertisements */
         uint16_t adv_int_min = 800;
@@ -58,6 +59,10 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
 
         break;
     case HCI_EVENT_DISCONNECTION_COMPLETE:
+        printf("BLE Disconnected\n");
+        break;
+    case ATT_EVENT_CONNECTED:
+        printf("BLE Connected\n");
         le_notification_enabled = 0;
         break;
     case ATT_EVENT_CAN_SEND_NOW:
@@ -105,11 +110,9 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
     return 0;
 }
 
-#define HEARTBEAT_PERIOD_MS 1000
-
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 
-static void callbackToggleLED(void)   /* called every second */
+static void callback_toggle_led(void)   /* called every second */
 {
     /* Invert the led */
     static int led_on = true;
@@ -121,13 +124,13 @@ static btstack_timer_source_t heartbeat;
 
 static void heartbeat_handler(struct btstack_timer_source *ts)
 {
-    callbackToggleLED();
+    callback_toggle_led();
     /* restart timer */
     btstack_run_loop_set_timer(ts, HEARTBEAT_PERIOD_MS);
     btstack_run_loop_add_timer(ts);
 }
 
-void BleServer_SetupBLE(void)
+static void ble_server_setup(void)
 {
     l2cap_init(); /* Set up L2CAP and register L2CAP with HCI layer */
     sm_init(); /* setup security manager */
@@ -147,7 +150,7 @@ void BleServer_SetupBLE(void)
     hci_power_control(HCI_POWER_ON); /* turn BLE on */
 }
 
-static void serverTask(void *pv)
+static void ble_server_task(void *pv)
 {
     /* initialize CYW43 driver architecture (will enable BT if/because CYW43_ENABLE_BLUETOOTH == 1) */
     if (cyw43_arch_init())
@@ -156,7 +159,7 @@ static void serverTask(void *pv)
         while(1) {}
     }
 
-    BleServer_SetupBLE();
+    ble_server_setup();
 
     while(1)
     {
@@ -164,23 +167,23 @@ static void serverTask(void *pv)
     }
 }
 
-void BleServer_Init(void)
+void ble_server_init(void)
 {
     if (xTaskCreate(
-                serverTask,  /* pointer to the task */
+                ble_server_task,  /* pointer to the task */
                 "BLEserver", /* task name for kernel awareness debugging */
-                1200/sizeof(StackType_t), /* task stack size */
+                4096, /* task stack size */
                 (void*)NULL, /* optional task startup argument */
                 tskIDLE_PRIORITY+2,  /* initial priority */
                 (TaskHandle_t*)NULL /* optional task handle to create */
             ) != pdPASS)
     {
-        printf("failed creating task\n");
-        for(;;) {} /* error! probably out of memory */
+        printf("Failed creating ble server task. \n");
+        while(1) {}
     }
 }
 
-void send_data(uint16_t value)
+void ble_server_send(uint16_t value)
 {
     data_to_send = value;
     if (le_notification_enabled)
