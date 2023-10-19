@@ -12,7 +12,6 @@
 #include "pico/stdlib.h"
 #include "temp_sensor.h"
 
-
 #define DEBUG 0
 
 #define HEARTBEAT_PERIOD_MS 100

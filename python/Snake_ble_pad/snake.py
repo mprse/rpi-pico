@@ -42,10 +42,10 @@ class Snake:
 
         # load bluetooth icon
         self.ble_image = pygame.image.load('bluetooth.png')
-        self.ble_image = pygame.transform.scale(self.ble_image, (self.ble_image.get_width() / 20, self.ble_image.get_height() / 20))
+        self.ble_image = pygame.transform.scale(self.ble_image, (self.ble_image.get_width() / 22, self.ble_image.get_height() / 22))
         self.ble_image_visible = "off"
         self.ble_image_toggler = False
-        self.ble_blink_interval = 300  # milliseconds
+        self.ble_blink_interval = 400  # milliseconds
         self.ble_last_time = 0
 
         if os.path.exists("hiscore.txt"):
@@ -106,9 +106,7 @@ class Snake:
                 print("BLE Disconnected")
                 print("Searching for BLE PAD...")
                 if self.ble_pad_is_running == True:
-                    print("join 1")
                     self.ble_pad_process.join()
-                    print("join 2")
                     self.ble_pad_is_running = False
                 self.ble_pad_process = multiprocessing.Process(target=self.ble_pad.start)
                 self.ble_pad_process.start()
@@ -118,8 +116,8 @@ class Snake:
                 print("BLE Error")
                 self.ble_image_visible = "error"
             else:
-                print("Unknown BLE Status")            
-        
+                print("Unknown BLE Status")
+
         if(self.ble_image_visible == "on"):
             self.display.blit(self.ble_image, (self.display_width - 170, 2))
         elif(self.ble_image_visible == "blink"):
@@ -127,11 +125,12 @@ class Snake:
             if(current_time - self.ble_last_time > self.ble_blink_interval):
                 self.ble_last_time = current_time
                 self.ble_image_toggler = not self.ble_image_toggler
-                if(self.ble_image_toggler == True):
-                    self.display.blit(self.ble_image, (self.display_width - 170, 2))
-                else:
-                    self.display.fill(BLACK, (self.display_width - 170, 2, self.ble_image.get_width(), self.ble_image.get_height()))
         elif(self.ble_image_visible == "off"):
+            self.display.fill(BLACK, (self.display_width - 170, 2, self.ble_image.get_width(), self.ble_image.get_height()))
+
+        if(self.ble_image_toggler == True):
+            self.display.blit(self.ble_image, (self.display_width - 170, 2))
+        else:
             self.display.fill(BLACK, (self.display_width - 170, 2, self.ble_image.get_width(), self.ble_image.get_height()))
 
 
@@ -250,13 +249,13 @@ class Snake:
 
                     food = pygame.Rect(self.food_x, self.food_y, self.food_block, self.food_block)
                     pygame.draw.rect(self.display, RED, food)
-                
+
                 self.ble_pad_status()
                 pygame.display.update()
                 self.clock.tick(10)
 
             self.ble_pad_status()
-                
+
             pygame.display.update()
             self.clock.tick(10)
 
