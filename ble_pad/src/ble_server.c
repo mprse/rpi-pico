@@ -12,8 +12,24 @@
 #include "pico/stdlib.h"
 #include "temp_sensor.h"
 
-#define HEARTBEAT_PERIOD_MS 300
+
+#define DEBUG 0
+
+#define HEARTBEAT_PERIOD_MS 100
 #define APP_AD_FLAGS 0x06
+
+#define LED_RED 26
+#define LED_GREEN 27
+#define LED_BLUE 28
+
+typedef enum {
+    BLE_ADVERTISING,
+    BLE_CONNECTED
+} ble_status_t;
+
+static ble_status_t ble_status = BLE_ADVERTISING;
+static char indicate_point = 0;
+
 static uint8_t adv_data[] =
 {
     /* Flags general discoverable */
@@ -33,6 +49,9 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
     UNUSED(size);
     UNUSED(channel);
     bd_addr_t local_addr;
+#if DEBUG
+    printf("packet_handler: type %d\n", packet_type);
+#endif
     if (packet_type != HCI_EVENT_PACKET) return;
 
     uint8_t event_type = hci_event_packet_get_type(packet);
@@ -47,8 +66,8 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
         printf("BLE up and running on %s.\n", bd_addr_to_str(local_addr));
 
         /* setup advertisements */
-        uint16_t adv_int_min = 800;
-        uint16_t adv_int_max = 800;
+        uint16_t adv_int_min = 200;
+        uint16_t adv_int_max = 200;
         uint8_t adv_type = 0;
         bd_addr_t null_addr;
         memset(null_addr, 0, 6);
@@ -56,13 +75,16 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
         assert(adv_data_len <= 31); // ble limitation
         gap_advertisements_set_data(adv_data_len, (uint8_t*) adv_data);
         gap_advertisements_enable(1);
+        ble_status = BLE_ADVERTISING;
 
         break;
     case HCI_EVENT_DISCONNECTION_COMPLETE:
         printf("BLE Disconnected\n");
+        ble_status = BLE_ADVERTISING;
         break;
     case ATT_EVENT_CONNECTED:
         printf("BLE Connected\n");
+        ble_status = BLE_CONNECTED;
         le_notification_enabled = 0;
         break;
     case ATT_EVENT_CAN_SEND_NOW:
@@ -76,7 +98,9 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
 static uint16_t att_read_callback(hci_con_handle_t connection_handle, uint16_t att_handle, uint16_t offset, uint8_t * buffer, uint16_t buffer_size)
 {
     UNUSED(connection_handle);
-
+#if DEBUG
+    printf("ATT read request\n");
+#endif
     if (att_handle == ATT_CHARACTERISTIC_ORG_BLUETOOTH_CHARACTERISTIC_TEMPERATURE_01_VALUE_HANDLE)
     {
         printf("Attribute read callback\n");
@@ -90,6 +114,26 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
     UNUSED(transaction_mode);
     UNUSED(offset);
     UNUSED(buffer_size);
+#if DEBUG
+    printf("ATT write request(%d): ", buffer_size);
+    // print bytes
+    for (uint16_t i = 0; i < buffer_size; i++)
+    {
+        printf("%02x ", buffer[i]);
+    }
+    printf("\n");
+#endif
+
+    // Handle score from snake
+    if (buffer_size == 5) {
+        // score indicattor (0xAB)
+        if (buffer[0] == 0xAB) {
+            uint32_t score = little_endian_read_32(buffer + 1, 0);
+            printf("Score: %d\n", score);
+            indicate_point = 1;
+        }
+
+    }
 
     if (att_handle != ATT_CHARACTERISTIC_ORG_BLUETOOTH_CHARACTERISTIC_TEMPERATURE_01_CLIENT_CONFIGURATION_HANDLE)
     {
@@ -107,6 +151,7 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
     {
         printf("Notifications disabled. \n");
     }
+
     return 0;
 }
 
@@ -117,14 +162,34 @@ static void callback_toggle_led(void)   /* called every second */
     /* Invert the led */
     static int led_on = true;
     led_on = !led_on;
-    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, led_on);
+    gpio_put(LED_BLUE, led_on);
+    //cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, led_on);
 }
 
 static btstack_timer_source_t heartbeat;
 
 static void heartbeat_handler(struct btstack_timer_source *ts)
 {
-    callback_toggle_led();
+    static uint32_t counter = 0;
+
+    counter++;
+
+    if (ble_status == BLE_ADVERTISING) {
+        if(counter % 4 == 0) { // 400 ms
+            callback_toggle_led();
+        }
+    } else {
+        // BLE connected
+        gpio_put(LED_BLUE, 1);
+    }
+
+    if (indicate_point == 1) {
+        indicate_point = 0;
+        gpio_put(LED_GREEN, 1);
+    } else {
+        gpio_put(LED_GREEN, 0);
+    }
+
     /* restart timer */
     btstack_run_loop_set_timer(ts, HEARTBEAT_PERIOD_MS);
     btstack_run_loop_add_timer(ts);
@@ -169,6 +234,17 @@ static void ble_server_task(void *pv)
 
 void ble_server_init(void)
 {
+    /* init LEDs */
+    gpio_init(LED_RED);
+    gpio_set_dir(LED_RED, GPIO_OUT);
+    gpio_put(LED_RED, 1); // indicate power on
+    gpio_init(LED_GREEN);
+    gpio_set_dir(LED_GREEN, GPIO_OUT);
+    gpio_put(LED_GREEN, 0);
+    gpio_init(LED_BLUE);
+    gpio_set_dir(LED_BLUE, GPIO_OUT);
+    gpio_put(LED_BLUE, 0);
+
     if (xTaskCreate(
                 ble_server_task,  /* pointer to the task */
                 "BLEserver", /* task name for kernel awareness debugging */
