@@ -11,10 +11,13 @@
 #include "queue.h"
 #include "pad.h"
 
-#define DOWN_BUTTON_PIN 18
-#define UP_BUTTON_PIN 19
-#define RIGHT_BUTTON_PIN 20
-#define LEFT_BUTTON_PIN 21
+#define DOWN_BUTTON_PIN 3
+#define UP_BUTTON_PIN 4
+#define RIGHT_BUTTON_PIN 5
+#define LEFT_BUTTON_PIN 2
+
+#define PAUSE_BUTTON_PIN 0
+#define AUX_BUTTON_PIN 1
 
 static QueueHandle_t pad_queue = NULL;
 static pad_event_handler_t pad_event_handler = NULL;
@@ -30,20 +33,53 @@ static void pad_queue_data(uint16_t data)
 // handle button presses
 static void gpio_callback(uint gpio, uint32_t events)
 {
-    switch(gpio)
-    {
-    case DOWN_BUTTON_PIN:
-        pad_queue_data(0x9901);
-        return;
-    case UP_BUTTON_PIN:
-        pad_queue_data(0x9902);
-        return;
-    case RIGHT_BUTTON_PIN:
-        pad_queue_data(0x9903);
-        return;
-    case LEFT_BUTTON_PIN:
-        pad_queue_data(0x9904);
-        return;
+
+    if (events & GPIO_IRQ_EDGE_RISE) {
+        switch(gpio)
+        {
+        case DOWN_BUTTON_PIN:
+            pad_queue_data(0x9901);
+            return;
+        case UP_BUTTON_PIN:
+            pad_queue_data(0x9902);
+            return;
+        case RIGHT_BUTTON_PIN:
+            pad_queue_data(0x9903);
+            return;
+        case LEFT_BUTTON_PIN:
+            pad_queue_data(0x9904);
+            return;
+        case PAUSE_BUTTON_PIN:
+            printf("Pause\n");
+            pad_queue_data(0x9905);
+            return;
+        case AUX_BUTTON_PIN:
+            pad_queue_data(0x9906);
+            return;
+        }
+    } else if (events & GPIO_IRQ_EDGE_FALL) {
+        switch(gpio)
+        {
+        case DOWN_BUTTON_PIN:
+            pad_queue_data(0x8801);
+            return;
+        case UP_BUTTON_PIN:
+            pad_queue_data(0x8802);
+            return;
+        case RIGHT_BUTTON_PIN:
+            pad_queue_data(0x8803);
+            return;
+        case LEFT_BUTTON_PIN:
+            pad_queue_data(0x8804);
+            return;
+        case PAUSE_BUTTON_PIN:
+            printf("Pause\n");
+            pad_queue_data(0x8805);
+            return;
+        case AUX_BUTTON_PIN:
+            pad_queue_data(0x8806);
+            return;
+        }
     }
 }
 
@@ -70,10 +106,12 @@ void pad_init(pad_event_handler_t event_handler)
     pad_queue = xQueueCreate(10, sizeof(uint16_t));
 
     // Attaches the gpio_callback function to the GPIOs
-    gpio_set_irq_enabled_with_callback(18, GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
-    gpio_set_irq_enabled_with_callback(19, GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
-    gpio_set_irq_enabled_with_callback(20, GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
-    gpio_set_irq_enabled_with_callback(21, GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
+    gpio_set_irq_enabled_with_callback(DOWN_BUTTON_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
+    gpio_set_irq_enabled_with_callback(UP_BUTTON_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
+    gpio_set_irq_enabled_with_callback(RIGHT_BUTTON_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
+    gpio_set_irq_enabled_with_callback(LEFT_BUTTON_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
+    gpio_set_irq_enabled_with_callback(PAUSE_BUTTON_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
+    gpio_set_irq_enabled_with_callback(AUX_BUTTON_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
 
     // Start the task
     if (xTaskCreate(pad_task, "PAD_Task", 1024, NULL, tskIDLE_PRIORITY+3, NULL) != pdPASS)
