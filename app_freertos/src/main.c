@@ -1,6 +1,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 #include <stdio.h>
+#include <dht.h>
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 #include "hardware/adc.h"
@@ -19,11 +20,14 @@
 /* Choose 'C' for Celsius or 'F' for Fahrenheit. */
 #define TEMPERATURE_UNITS 'C'
 
-
 #define UDP_PORT 4444
 #define BEACON_MSG_LEN_MAX 127
 #define BEACON_TARGET "10.1.1.170"
 #define BEACON_INTERVAL_MS 1000
+
+static const dht_model_t DHT_MODEL = DHT11;
+static const uint DATA_PIN = 15;
+static dht_t dht;
 
 struct udp_pcb* pcb = NULL;
 
@@ -125,10 +129,26 @@ void led_task()
 void temp_task()
 {
     init_temp_sensor();
+    dht_init(&dht, DHT_MODEL, pio0, DATA_PIN, true /* pull_up */);
 
     while (true) {
         float temperature = read_onboard_temperature(TEMPERATURE_UNITS);
         printf("Onboard temp sensor = %.02f %c\n", temperature, TEMPERATURE_UNITS);
+
+        dht_start_measurement(&dht);
+        dht_start_measurement(&dht);
+
+        float humidity;
+        float temperature_c;
+        dht_result_t result = dht_finish_measurement_blocking(&dht, &humidity, &temperature_c);
+        if (result == DHT_RESULT_OK) {
+            printf("%.1f C, %.1f%% humidity\n", temperature_c, humidity);
+        } else if (result == DHT_RESULT_TIMEOUT) {
+            puts("DHT sensor not responding. Please check your wiring.");
+        } else {
+            assert(result == DHT_RESULT_BAD_CHECKSUM);
+            puts("Bad checksum");
+        }
 
         vTaskDelay(100);
     }
@@ -191,6 +211,8 @@ int main()
 
     printf("Hello, world!\n");
 
+
+
     if (cyw43_arch_init()) {
         printf("Wi-Fi init failed");
         while(1) {};
@@ -213,7 +235,6 @@ int main()
     } else {
         printf("Connected.\n");
     }
-
 
     xTaskCreate(led_task, "LED_Task", 256, NULL, 1, NULL);
     xTaskCreate(temp_task, "TEMP_Task", 256, NULL, 1, NULL);
